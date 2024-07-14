@@ -1,0 +1,31 @@
+[package]
+name = "basin-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+adm_provider = { git = "https://github.com/textileio/basin.git", rev = "9d790ef961731f2331eda0d45d5494d73e85c0ad" }
+adm_sdk = { git = "https://github.com/textileio/basin.git", rev = "9d790ef961731f2331eda0d45d5494d73e85c0ad" }
+adm_signer = { git = "https://github.com/textileio/basin.git", rev = "9d790ef961731f2331eda0d45d5494d73e85c0ad" }
+anyhow = "1.0.82"
+bytes = "1.6.1"
+clap = { version = "4.1.14", features = [
+    "color",
+    "derive",
+    "env",
+    "string",
+    "unicode",
+] }
+ethers = "2.0.14"
+fendermint_actor_accumulator = { git = "https://github.com/textileio/ipc.git", rev = "89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7" }
+fendermint_crypto = { git = "https://github.com/textileio/ipc.git", rev = "89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7" }
+futures = "0.3.30"
+fvm_shared = "4.1.0"
+ipc-api = { git = "https://github.com/textileio/ipc.git", rev = "89c3871b8ba7eaf30e05ef0f29b6e3fb5c5789d7" }
+log = "0.4.22"
+reqwest = { version = "0.11.27", features = ["json", "stream", "multipart"] }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.115"
+stderrlog = "0.6.0"
+tokio = { version = "1.37.0", features = ["fs", "macros", "rt-multi-thread"] }
+warp = "0.3.7"
