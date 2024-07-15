@@ -65,7 +65,7 @@ dependencies = [
  "adm_signer",
  "anyhow",
  "async-stream",
- "async-tempfile",
+ "async-tempfile 0.5.0",
  "async-trait",
  "base64 0.22.1",
  "bytes",
@@ -268,6 +268,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-tempfile"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acb90d9834a8015109afc79f1f548223a0614edcbab62fb35b62d4b707e975e7"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -381,6 +390,7 @@ dependencies = [
  "adm_sdk",
  "adm_signer",
  "anyhow",
+ "async-tempfile 0.6.0",
  "bytes",
  "clap",
  "ethers",
