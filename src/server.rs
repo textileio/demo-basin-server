@@ -21,7 +21,7 @@ pub async fn run(cli: Cli) -> anyhow::Result<()> {
 
     let log_request_details = warp::log::custom(log_request_details);
 
-    let router = all_routes(private_key.clone(), os_address.clone(), network.clone())
+    let router = all_routes(private_key.clone(), os_address, network)
         .with(
             warp::cors()
                 .allow_any_origin()

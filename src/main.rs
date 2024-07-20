@@ -3,7 +3,7 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use anyhow::anyhow;
 use clap::Parser;
 use fendermint_crypto::SecretKey;
-use fvm_shared::address::{Address, Network};
+use fvm_shared::address::Address;
 use stderrlog::Timestamp;
 
 use adm_provider::util::parse_address;
@@ -15,7 +15,7 @@ use crate::server::run;
 mod server;
 
 #[derive(Clone, Debug, Parser)]
-#[command(name = "adm_faucet", author, version, about, long_about = None)]
+#[command(name = "basin_server", author, version, about, long_about = None)]
 struct Cli {
     /// Wallet private key (ECDSA, secp256k1) for sending faucet funds.
     #[arg(short, long, env, value_parser = parse_secret_key)]
@@ -26,7 +26,7 @@ struct Cli {
     /// Object store address.
     #[arg(short, long, env, value_parser = parse_address)]
     os_address: Address,
-    /// Subnet network type.
+    /// Subnet network type (note: currently hardcoded to `testnet`).
     #[arg(short, long, env, value_parser = parse_network)]
     network: SdkNetwork,
     /// Logging verbosity (repeat for more verbose logging).
@@ -49,7 +49,7 @@ fn parse_faucet_url(listen: &str) -> anyhow::Result<SocketAddr> {
 }
 
 /// Parse the [`SocketAddr`] from a faucet URL string.
-fn parse_network(network: &str) -> anyhow::Result<SdkNetwork> {
+fn parse_network(_: &str) -> anyhow::Result<SdkNetwork> {
     Ok(SdkNetwork::Testnet)
 }
 

@@ -1,26 +1,17 @@
+use std::error::Error;
 use std::ops::Deref;
-use std::str::FromStr;
-use std::{error::Error, os::unix::net};
 
 use adm_sdk::machine::Machine;
 use bytes::Buf;
-use ethers::prelude::TransactionReceipt;
 use fendermint_crypto::SecretKey;
 use futures::TryStreamExt;
-use fvm_shared::{address::Address, econ::TokenAmount};
+use fvm_shared::address::Address;
 use serde::Deserialize;
 use serde_json::json;
-use tokio::fs::File;
-use tokio::io::{AsyncSeekExt, AsyncWriteExt};
-use warp::{
-    multipart::{FormData, Part},
-    Filter, Rejection, Reply,
-};
+use warp::{multipart::FormData, Filter, Rejection, Reply};
 
 use adm_provider::{json_rpc::JsonRpcProvider, response::Cid, tx::TxReceipt, util::parse_address};
-use adm_sdk::{
-    account::Account, machine::objectstore::ObjectStore, network::Network as SdkNetwork,
-};
+use adm_sdk::{machine::objectstore::ObjectStore, network::Network as SdkNetwork};
 
 use crate::server::{
     shared::{get_faucet_wallet, with_private_key, BadRequest, BaseRequest},
@@ -88,9 +79,9 @@ pub fn set_route(
         .and(warp::post())
         .and(warp::header::header("content-type"))
         .and(warp::multipart::form().max_length(MAX_FILE_SIZE)) // Adjust max_length as needed
-        .and(with_private_key(private_key.clone()))
-        .and(with_os_address(os_address.clone()))
-        .and(with_network(network.clone()))
+        .and(with_private_key(private_key))
+        .and(with_os_address(os_address))
+        .and(with_network(network))
         .and_then(validate_content_type)
 }
 
@@ -101,7 +92,7 @@ async fn validate_content_type(
     os_address: Address,
     network: SdkNetwork,
 ) -> Result<impl Reply, Rejection> {
-    log_request_body("new req", &format!("{:?}", content_type));
+    log_request_body("set", &format!("{:?}", content_type));
     if content_type.starts_with("multipart/form-data") {
         handle_set(form, private_key, os_address, network).await
     } else {
@@ -166,8 +157,8 @@ pub async fn handle_set(
         }
     }
 
-    let address = address.ok_or_else(|| warp::reject::reject())?;
-    let key = key.ok_or_else(|| warp::reject::reject())?;
+    let address = address.ok_or_else(warp::reject::reject)?;
+    let key = key.ok_or_else(warp::reject::reject)?;
 
     let base = BaseRequest { key };
     let value = FileData {

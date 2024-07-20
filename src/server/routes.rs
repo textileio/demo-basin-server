@@ -11,5 +11,5 @@ pub fn all_routes(
     os_address: Address,
     network: SdkNetwork,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    list_route(os_address.clone(), network.clone()).or(set_route(private_key, os_address, network))
+    list_route(os_address, network).or(set_route(private_key, os_address, network))
 }

@@ -6,7 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use warp::{http::StatusCode, Filter, Rejection, Reply};
 
 use adm_provider::util::parse_address;
-use adm_sdk::network::{self, Network as SdkNetwork};
+use adm_sdk::network::Network as SdkNetwork;
 use adm_signer::{AccountKind, Wallet};
 
 /// Generic base request for all routes.
@@ -89,14 +89,14 @@ pub fn with_private_key(
 pub fn with_os_address(
     os_address: Address,
 ) -> impl Filter<Extract = (Address,), Error = Infallible> + Clone {
-    warp::any().map(move || os_address.clone())
+    warp::any().map(move || os_address)
 }
 
 /// Filter to pass the network to the request handler.
 pub fn with_network(
     network: SdkNetwork,
 ) -> impl Filter<Extract = (SdkNetwork,), Error = Infallible> + Clone {
-    warp::any().map(move || network.clone())
+    warp::any().map(move || network)
 }
 
 /// Get the faucet wallet that will send transactions on the subnet.

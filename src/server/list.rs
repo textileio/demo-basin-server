@@ -1,47 +1,40 @@
 use std::error::Error;
-use std::ops::Deref;
 
-use bytes::buf;
-use ethers::prelude::TransactionReceipt;
-use fendermint_crypto::SecretKey;
 use fvm_shared::address::Address;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use tokio::io::AsyncWriteExt;
-use warp::{http::Response, Filter, Rejection, Reply};
+use warp::{Filter, Rejection, Reply};
 
 use adm_provider::json_rpc::JsonRpcProvider;
 use adm_sdk::{
-    account::Account,
-    machine::{objectstore::ObjectStore, Machine},
+    machine::{objectstore::ObjectStore, objectstore::QueryOptions, Machine},
     network::Network as SdkNetwork,
 };
 
-use crate::server::{
-    shared::{get_faucet_wallet, with_private_key, BadRequest, BaseRequest },
-    util::log_request_body,
-};
+use crate::server::{shared::BadRequest, util::log_request_body};
 
 use super::shared::{with_network, with_os_address};
 
-/// List request (essentially, equivalent to [`BaseRequest`]).
-#[derive(Deserialize)]
+/// List request options.
+#[derive(Deserialize, Default)]
 pub struct ListRequest {
-    #[serde(flatten)]
-    pub base: BaseRequest,
+    /// The prefix to filter objects by.
+    pub prefix: Option<String>,
+    /// The delimiter used to define object hierarchy.
+    pub delimiter: Option<String>,
+    /// The offset to start listing objects from.
+    pub offset: Option<u64>,
+    /// The maximum number of objects to list.
+    pub limit: Option<u64>,
 }
 
 impl std::fmt::Display for ListRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.base)
-    }
-}
-
-impl Deref for ListRequest {
-    type Target = BaseRequest;
-
-    fn deref(&self) -> &Self::Target {
-        &self.base
+        write!(
+            f,
+            "prefix: {:?}, delimiter: {:?}, offset: {:?}, limit: {:?}",
+            self.prefix, self.delimiter, self.offset, self.limit
+        )
     }
 }
 
@@ -53,10 +46,18 @@ pub fn list_route(
     warp::path("list")
         .and(warp::post())
         .and(warp::header::exact("content-type", "application/json"))
-        .and(warp::body::json())
-        .and(with_os_address(os_address.clone()))
-        .and(with_network(network.clone()))
+        .and(with_list_body())
+        .and(with_os_address(os_address))
+        .and(with_network(network))
         .and_then(handle_list)
+}
+
+// Custom filter to allow for empty request body and use defaults.
+fn with_list_body() -> impl Filter<Extract = (ListRequest,), Error = Rejection> + Clone {
+    warp::body::json()
+        .map(Some)
+        .or_else(|_| async { Ok::<(Option<ListRequest>,), Rejection>((None,)) })
+        .map(|body: Option<ListRequest>| body.unwrap_or_default())
 }
 
 /// Handles the `/list` request, first initializing the network.
@@ -78,14 +79,22 @@ pub async fn handle_list(
         .objects
         .iter()
         .map(|(key_bytes, object)| {
-            let key = core::str::from_utf8(&key_bytes).unwrap_or_default().to_string();                    
-            let cid = cid::Cid::try_from(object.cid.clone().0).unwrap_or_default();                    
+            let key = String::from_utf8_lossy(key_bytes).to_string();
+            let cid = cid::Cid::try_from(object.cid.clone().0).unwrap_or_default();
             let value = json!({"cid": cid.to_string(), "resolved": object.resolved, "size": object.size, "metadata": object.metadata});
             json!({"key": key, "value": value})
         })
         .collect::<Vec<Value>>();
-        
-    let json = json!(objects);
+    let common_prefixes = object_list
+        .common_prefixes
+        .iter()
+        .map(|prefix_bytes| String::from_utf8_lossy(prefix_bytes).to_string())
+        .collect::<Vec<String>>();
+
+    let json = json!({
+        "objects": objects,
+        "common_prefixes": common_prefixes
+    });
     Ok(warp::reply::json(&json))
 }
 
@@ -97,9 +106,14 @@ pub async fn list(
 ) -> anyhow::Result<fendermint_actor_objectstore::ObjectList, Box<dyn Error>> {
     let provider =
         JsonRpcProvider::new_http(network.rpc_url()?, None, Some(network.object_api_url()?))?;
-    // let mut buf = tokio::io::BufWriter::new(tokio::fs::File::create("temp").await?);
+    let options = QueryOptions {
+        prefix: req.prefix.unwrap_or_default(),
+        delimiter: req.delimiter.unwrap_or_default(),
+        offset: req.offset.unwrap_or_default(),
+        limit: req.limit.unwrap_or_default(),
+        height: Default::default(),
+    };
 
-    let list = os.query(&provider, Default::default()).await?;
-
+    let list = os.query(&provider, options).await?;
     Ok(list)
 }

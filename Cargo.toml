@@ -1,7 +1,13 @@
 [package]
-name = "basin-server"
-version = "0.1.0"
+name = "basin_server"
+description = "A simple server for Basin object storage"
 edition = "2021"
+readme = "./README.md"
+version = "0.1.0"
+
+[[bin]]
+name = "basin_server"
+path = "src/main.rs"
 
 [dependencies]
 adm_provider = { git = "https://github.com/textileio/basin.git", rev = "9d790ef961731f2331eda0d45d5494d73e85c0ad" }

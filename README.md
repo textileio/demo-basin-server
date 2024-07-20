@@ -14,6 +14,7 @@ Before getting started, you'll need to make sure you're properly set up on the B
 
 ```sh
 git clone https://github.com/textileio/basin
+make build
 make install
 ```
 
@@ -45,7 +46,7 @@ We deposit 10 tFIL into the account and after ~30 minutes (the current constrain
 
 ### Setup
 
-Now, we can get things going. Check out the `env.example` file and update the `PRIVATE_KEY`. There is a provided object store address (`OS_ADDRESS`) that you can use, which has fully public write enabled.
+Now, we can get things going. Check out the `env.example` file, update the `PRIVATE_KEY`, and create a new `env` file with these values. There is a provided object store address (`OS_ADDRESS`) that you can use, which has fully public write enabled.
 
 ```sh
 export PRIVATE_KEY=hex_encoded_private_key
@@ -54,96 +55,138 @@ export OS_ADDRESS=t2ymaz2yovxlqplqd53tfuiw4umwpdt7tfmbf3v7q
 export NETWORK=testnet
 ```
 
-If you'd like to create your own object store, you can do so with the CLI—and be sure the `PRIVATE_KEY` is set!
+If you'd like to create your own object store, you can do so with the CLI—and be sure the `PRIVATE_KEY` is set before attempting to send transactions!
 
 ```sh
 adm os create
 ```
 
-### Running the server
-
-Now, you can start the server:
+Be sure to source the `env` file before running the server:
 
 ```sh
-cargo build
-adm_server -vv
+source env
+```
+
+### Running the server
+
+First, build and install the server binary:
+
+```sh
+make build
+make install
+```
+
+Then, you can start it with the `env` settings:
+
+```sh
+basin_server -vv
 ```
 
 The `-vv` enables verbose logging, which can be helpful for debugging:
 
 ```sh
-2024-07-19T18:26:39.162-04:00 - INFO Starting server at 127.0.0.1:8081
-2024-07-19T18:26:48.795-04:00 - INFO {"body":"\"multipart/form-data; boundary=------------------------uSkTaZdBvPUiwVg1qOO6fz\"","route":"new req"}
-os address: t2ymaz2yovxlqplqd53tfuiw4umwpdt7tfmbf3v7q
-2024-07-19T18:26:51.262-04:00 - INFO {"client_addr":"127.0.0.1:60821","duration_ms":2466,"method":"POST","path":"/set","status":200}
-2024-07-19T18:45:42.847-04:00 - INFO {"client_addr":"127.0.0.1:61314","duration_ms":636,"method":"POST","path":"/get","status":200}
+2024-07-20T17:49:27.589-04:00 - INFO Starting server at 127.0.0.1:8081
+2024-07-20T17:50:12.015-04:00 - INFO {"body":"{\"multipart/form-data; boundary=------------------------u3Cayud8pzT4bsvlrHH4Z5\"}","route":"set"}
+2024-07-20T17:50:14.691-04:00 - INFO {"client_addr":"127.0.0.1:50064","duration_ms":2676,"method":"POST","path":"/set","status":200}
+2024-07-20T17:50:33.952-04:00 - INFO {"body":"{prefix: Some(\"hello/\"), delimiter: None, offset: None, limit: Some(10)}","route":"list"}
+2024-07-20T17:50:34.371-04:00 - INFO {"client_addr":"127.0.0.1:50068","duration_ms":419,"method":"POST","path":"/list","status":200}
 ```
 
 There are two routes enabled:
 
 - `POST /set`: Upload an object to the object store
-- `POST /get`: Get an object from the object store
+- `POST /list`: Get an object from the object store
 
 A maximum value of 100 MB is fixed for the server. Within the `src/server/set.rs` file, you can adjust by changing the `MAX_FILE_SIZE` constant.
 
 ### Client requests
 
-To put a file in the object store, use the `/set` endpoint with multipart form data and fields for the uploading `address`, `key`, and `file` path:
+To put a file in the object store, use the `/set` endpoint with multipart form data and fields for the uploading:
+
+- `address`: The address of the requesting user (e.g., for attribution purposes).
+- `key`: Custom key for the object.
+- `file`: The local filepath.
 
 ```sh
 curl -X POST -H 'Content-Type: multipart/form-data' \
 --form 'address=0x79447b8db3a9d23f7db75ae724ba450b7b8dd7b0' \
---form 'key=1234abcd' \
+--form 'key=hello/test' \
 --form 'file=@test.dat' \
-'http://localhost:8081/set'
+http://localhost:8081/set
 ```
 
-This will log the transaction information:
+This will log the transaction information from the Basin subnet:
 
-```sh
+```json
 {
-  "data": "bafy2bzacedn6bzzjgtzcskpeofjrirvxrisv7x2rokku35kiclpmrazqzyeji",
-  "gas_used": 4565634,
-  "hash": "F652F998705F835FC784FC00B9583CBDCF21D27EC74C004404CB0B7EE057E54C",
-  "height": "880695",
+  "data": "bafy2bzacedxeu3g3uazqpn2ln7yvyfhc6ilj3vi5bf3h6usvygsxaub7paws4",
+  "gas_used": 4311212,
+  "hash": "1DDBED9D0398C4A7C0B2E0DE99BCE77C34232CC1AD45E9304F990A416ACAF830",
+  "height": "956895",
   "status": "committed"
 }
 ```
 
-You can list all objects by simply hitting the `/list`` endpoint:
+You can list objects in the object store along with a query filters:
+
+- `prefix`: Prefix to filter objects by.
+- `limit`: Maximum number of objects to list.
+- `delimiter`: Delimiter used to define object hierarchy.
+- `offset`: Offset to start listing objects from.
 
 ```sh
 curl -X POST -H 'Content-Type: application/json' \
---data-raw '{"key":"hello/test"}' \
-'http://localhost:8081/list'
+-d '{"prefix": "hello/", "limit": 10}' \
+http://localhost:8081/list
 ```
 
-This will log something like:
+The response will provide all matching objects under that specific prefix:
+
+```json
+{
+  "common_prefixes": [],
+  "objects": [
+    {
+      "key": "hello/world",
+      "value": {
+        "cid": "bafybeid3weurg3gvyoi7nisadzolomlvoxoppe2sesktnpvdve3256n5tq",
+        "metadata": {},
+        "resolved": true,
+        "size": 5
+      }
+    }
+  ]
+}
+```
+
+Alteratively, you can list all objects with default settings by providing no query parameters:
 
 ```sh
-[
-  {
-    "key": "hello",
-    "value": {
-      "cid": "bafybeiffndsajwhk3lwjewwdxqntmjm4b5wxaaanokonsggenkbw6slwk4",
-      "metadata": {},
-      "resolved": true,
-      "size": 6
-    }
-  }
-]
+curl -X POST -H 'Content-Type: application/json' \
+http://localhost:8081/list
 ```
 
 ## Development
 
 Local development isn't _quite_ enabled yet, so you'll have to use the public Filecoin Calibration testnet and Basin subnet setup.
 
+All the available Makefile commands include:
+
+- Build all crates: `make build`
+- Install the CLI: `make install`
+- Run linter: `make lint`
+- Run formatter: `make check-fmt`
+- Run clippy: `make check-clippy`
+- Do all of the above: `make all`
+- Clean dependencies: `make clean`
+
+Only basic `INFO` and `ERROR` logging is implemented. See the `log_request_details` function in `src/server/utils.rs` for more information.
+
 ## Contributing
 
 PRs accepted.
 
-Small note: If editing the README, please conform to
-the [standard-readme](https://github.com/RichardLitt/standard-readme) specification.
+Small note: If editing the README, please conform to the [standard-readme](https://github.com/RichardLitt/standard-readme) specification.
 
 ## License
 

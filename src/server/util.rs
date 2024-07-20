@@ -34,7 +34,7 @@ pub fn log_request_details(request: Info) {
 pub fn log_request_body(route: &str, body: &str) {
     let log_data = json!({
         "route": route,
-        "body": body
+        "body": format!("{{{}}}", body)
     });
     info!("{}", log_data);
 }
