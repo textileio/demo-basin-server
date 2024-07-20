@@ -27,6 +27,8 @@ use crate::server::{
     util::log_request_body,
 };
 
+use super::shared::{deserialize_address, with_network, with_os_address};
+
 /// Maximum file size for uploaded files.
 const MAX_FILE_SIZE: u64 = 1024 * 1024 * 100; // 100 MB
 
@@ -41,29 +43,32 @@ pub struct FileData {
 pub struct SetRequest {
     #[serde(flatten)]
     pub base: BaseRequest,
+    /// The address (0x prefix or t4/f4) of the account making the request.
+    #[serde(deserialize_with = "deserialize_address")]
+    pub address: Address,
     /// The value to set at the given key (string or file).
     pub value: FileData,
 }
 
 impl std::fmt::Display for FileData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "filename: {}, content: {}", self.filename, "test str")
+        write!(
+            f,
+            "filename: {}, content: {:?}",
+            self.filename, self.content
+        )
     }
 }
-// fmt::Display for SetRequest {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match &self.value {
-//             SetValue::String(s) => write!(f, "{}, value: {}", self.base, s),
-//             SetValue::File(file) => write!(
-//                 f,
-//                 "{}, file: {}, size: {} bytes",
-//                 self.base,
-//                 file.filename,
-//                 file.content.len()
-//             ),
-//         }
-//     }
-// }
+
+impl std::fmt::Display for SetRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}, address, {}, value: {}",
+            self.base, self.address, self.value
+        )
+    }
+}
 
 impl Deref for SetRequest {
     type Target = BaseRequest;
@@ -76,12 +81,16 @@ impl Deref for SetRequest {
 /// Route filter for `/set` endpoint.
 pub fn set_route(
     private_key: SecretKey,
+    os_address: Address,
+    network: SdkNetwork,
 ) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::path("set")
         .and(warp::post())
         .and(warp::header::header("content-type"))
         .and(warp::multipart::form().max_length(MAX_FILE_SIZE)) // Adjust max_length as needed
         .and(with_private_key(private_key.clone()))
+        .and(with_os_address(os_address.clone()))
+        .and(with_network(network.clone()))
         .and_then(validate_content_type)
 }
 
@@ -89,10 +98,12 @@ async fn validate_content_type(
     content_type: String,
     form: warp::multipart::FormData,
     private_key: SecretKey,
+    os_address: Address,
+    network: SdkNetwork,
 ) -> Result<impl Reply, Rejection> {
     log_request_body("new req", &format!("{:?}", content_type));
     if content_type.starts_with("multipart/form-data") {
-        handle_set(form, private_key).await
+        handle_set(form, private_key, os_address, network).await
     } else {
         Err(warp::reject::custom(BadRequest {
             message: "Invalid Content-Type".to_string(),
@@ -100,10 +111,14 @@ async fn validate_content_type(
     }
 }
 
-pub async fn handle_set(form: FormData, private_key: SecretKey) -> Result<impl Reply, Rejection> {
-    let network = SdkNetwork::Testnet.init();
-    let os_addr = parse_address("t2ymaz2yovxlqplqd53tfuiw4umwpdt7tfmbf3v7q").unwrap();
-    let os = ObjectStore::attach(os_addr);
+pub async fn handle_set(
+    form: FormData,
+    private_key: SecretKey,
+    os_address: Address,
+    network: SdkNetwork,
+) -> Result<impl Reply, Rejection> {
+    let net = network.init();
+    let os = ObjectStore::attach(os_address);
 
     let mut filename: Option<String> = None;
     let mut file_content: Vec<u8> = Vec::new();
@@ -154,14 +169,18 @@ pub async fn handle_set(form: FormData, private_key: SecretKey) -> Result<impl R
     let address = address.ok_or_else(|| warp::reject::reject())?;
     let key = key.ok_or_else(|| warp::reject::reject())?;
 
-    let base = BaseRequest { address, key };
+    let base = BaseRequest { key };
     let value = FileData {
         filename: filename.unwrap_or_default(),
         content: file_content,
     };
-    let set_req = SetRequest { base, value };
+    let set_req = SetRequest {
+        base,
+        address,
+        value,
+    };
 
-    let res = set(*network, os, private_key, set_req).await.map_err(|e| {
+    let res = set(*net, os, private_key, set_req).await.map_err(|e| {
         Rejection::from(BadRequest {
             message: format!("set error: {}", e),
         })
@@ -176,18 +195,19 @@ pub async fn set(
     network: SdkNetwork,
     os: ObjectStore,
     private_key: SecretKey,
-    set: SetRequest,
+    req: SetRequest,
 ) -> anyhow::Result<TxReceipt<Cid>, Box<dyn Error>> {
     let mut signer = get_faucet_wallet(private_key, network)?;
     let provider =
         JsonRpcProvider::new_http(network.rpc_url()?, None, Some(network.object_api_url()?))?;
     let file = async_tempfile::TempFile::new().await?;
 
+    signer.init_sequence(&provider).await?;
     let tx = os
         .add(
             &provider,
             &mut signer,
-            set.key.as_str(),
+            req.key.as_str(),
             file,
             Default::default(),
         )

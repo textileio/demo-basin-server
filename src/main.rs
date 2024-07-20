@@ -3,8 +3,11 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use anyhow::anyhow;
 use clap::Parser;
 use fendermint_crypto::SecretKey;
+use fvm_shared::address::{Address, Network};
 use stderrlog::Timestamp;
 
+use adm_provider::util::parse_address;
+use adm_sdk::network::Network as SdkNetwork;
 use adm_signer::key::parse_secret_key;
 
 use crate::server::run;
@@ -20,6 +23,12 @@ struct Cli {
     /// Faucet `host:port` string for running the HTTP server.
     #[arg(long, env, value_parser = parse_faucet_url)]
     listen: SocketAddr,
+    /// Object store address.
+    #[arg(short, long, env, value_parser = parse_address)]
+    os_address: Address,
+    /// Subnet network type.
+    #[arg(short, long, env, value_parser = parse_network)]
+    network: SdkNetwork,
     /// Logging verbosity (repeat for more verbose logging).
     #[arg(short, long, env, action = clap::ArgAction::Count)]
     verbosity: u8,
@@ -37,6 +46,11 @@ fn parse_faucet_url(listen: &str) -> anyhow::Result<SocketAddr> {
             listen
         )),
     }
+}
+
+/// Parse the [`SocketAddr`] from a faucet URL string.
+fn parse_network(network: &str) -> anyhow::Result<SdkNetwork> {
+    Ok(SdkNetwork::Testnet)
 }
 
 #[tokio::main]
