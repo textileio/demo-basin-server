@@ -8,6 +8,7 @@ use futures::TryStreamExt;
 use fvm_shared::address::Address;
 use serde::Deserialize;
 use serde_json::json;
+use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use warp::{multipart::FormData, Filter, Rejection, Reply};
 
 use adm_provider::{json_rpc::JsonRpcProvider, response::Cid, tx::TxReceipt, util::parse_address};
@@ -191,17 +192,14 @@ pub async fn set(
     let mut signer = get_faucet_wallet(private_key, network)?;
     let provider =
         JsonRpcProvider::new_http(network.rpc_url()?, None, Some(network.object_api_url()?))?;
-    let file = async_tempfile::TempFile::new().await?;
+    let mut file = async_tempfile::TempFile::new().await?;
+    file.write_all(&req.value.content).await?;
+    file.flush().await?;
+    file.rewind().await?;
 
     signer.init_sequence(&provider).await?;
     let tx = os
-        .add(
-            &provider,
-            &mut signer,
-            req.key.as_str(),
-            file,
-            Default::default(),
-        )
+        .add(&provider, &mut signer, &req.key, file, Default::default())
         .await?;
     Ok(tx)
 }
